@@ -236,3 +236,22 @@ class TransformerBlock(nn.Module):
 if MAIN:
     rand_float_test(TransformerBlock, [2, 4, 768])
     load_gpt2_test(TransformerBlock, reference_gpt2.blocks[0], cache["resid_pre", 0])
+# %%
+class Unembed(nn.Module):
+    def __init__(self,cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.W_U = nn.Parameter(torch.empty((cfg.d_model,cfg.d_vocab)))
+        nn.init.normal_(self.W_U,std=self.cfg.init_range)
+        self.b_U = nn.Parameter(torch.zeros((cfg.d_vocab),requires_grad= False))
+
+    def forward(self, normalized_resid_final):
+        if self.cfg.debug:
+            print("Normalized_resid_final:", normalized_resid_final.shape)
+        logits = einsum("batch position d_model, d_model d_vocab -> batch position d_vocab", normalized_resid_final, self.W_U) + self.b_U
+        return logits
+# %%
+if MAIN:
+    rand_float_test(Unembed, [2, 4, 768])
+    load_gpt2_test(Unembed, reference_gpt2.unembed, cache["ln_final.hook_normalized"])
+# %%
