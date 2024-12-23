@@ -115,6 +115,7 @@ class Embed(nn.Module):
             print("Embeddings:", embeddings.shape)
         return embeddings
 # %%
-rand_int_test(Embed, [2,4])
-load_gpt2_test(Embed,reference_gpt2.embed, tokens)
+if MAIN:
+    rand_int_test(Embed, [2,4])
+    load_gpt2_test(Embed,reference_gpt2.embed, tokens)
 # %%
