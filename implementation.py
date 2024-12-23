@@ -255,3 +255,42 @@ if MAIN:
     rand_float_test(Unembed, [2, 4, 768])
     load_gpt2_test(Unembed, reference_gpt2.unembed, cache["ln_final.hook_normalized"])
 # %%
+class DemoTransformer(nn.Module):
+    def __init__(self,cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.embed = Embed(cfg)
+        self.pos_embed = PosEmbed(cfg)
+        self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
+        self.ln_final = LayerNorm(cfg)
+        self.unembed = Unembed(cfg)
+
+    def forward(self,tokens):
+        embeddings = self.embed(tokens)
+        pos_embed = self.pos_embed(tokens)
+        resid_pre = embeddings + pos_embed
+        for block in self.blocks:
+            resid_pre = block(resid_pre)
+        normalized_resid_final = self.ln_final(resid_pre)
+        logits = self.unembed(normalized_resid_final)
+        return logits
+# %%
+if MAIN:
+    rand_int_test(DemoTransformer, [2, 4])
+    load_gpt2_test(DemoTransformer, reference_gpt2, tokens)
+# %%
+if MAIN:
+    demo_gpt2 = DemoTransformer(Config(debug=False))
+    demo_gpt2.load_state_dict(reference_gpt2.state_dict(), strict=False)
+    demo_gpt2.cuda()
+
+# %%
+if MAIN:
+    test_string = "I have a tender spot in my heart for cripples, bastards, and broken things."
+    test_tokens = reference_gpt2.to_tokens(test_string).cuda()
+    demo_logits = demo_gpt2(test_tokens)
+# %%
+def lm_cross_entropy_loss(logits, tokens):
+    log_probs = logits.log_softmax(dim=-1)
+    pred_log_probs = log_probs[:,:-1].gather(dim=-1,index=tokens[:,1:].unsqueeze(-1)).squeeze(-1)
+    return -pred_log_probs.mean()
