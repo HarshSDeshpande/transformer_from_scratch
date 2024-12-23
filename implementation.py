@@ -119,3 +119,22 @@ if MAIN:
     rand_int_test(Embed, [2,4])
     load_gpt2_test(Embed,reference_gpt2.embed, tokens)
 # %%
+class PosEmbed(nn.Module):
+    def __init__(self,cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.W_pos = nn.Parameter(torch.empty(cfg.n_ctx,cfg.d_model))
+        nn.init.normal_(self.W_pos,std=self.cfg.init_range)
+
+    def forward(self,tokens):
+        if self.cfg.debug:
+            print("Tokens:", tokens.shape)
+        pos_embed = self.W_pos[:tokens.size(1),:]
+        pos_embed = einops.repeat(pos_embed, "position d_model -> batch position d_model", batch=tokens.size(0))
+        if self.cfg.debug:
+            print("Positional embedding:", pos_embed.shape)
+        return pos_embed
+# %%
+if MAIN:
+    rand_int_test(PosEmbed,[2,4])
+    load_gpt2_test(PosEmbed, reference_gpt2.pos_embed,tokens)
