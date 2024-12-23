@@ -100,3 +100,21 @@ if MAIN:
     _ = rand_float_test(LayerNorm, [2,4,768])
     _ = load_gpt2_test(LayerNorm, reference_gpt2.ln_final,"blocks.11.hook_resid_post")
 # %%
+class Embed(nn.Module):
+    def __init__(self,cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.W_E = nn.Parameter(torch.empty(cfg.d_vocab, cfg.d_model))
+        nn.init.normal_(self.W_E, std=cfg.init_range)
+
+    def forward(self, tokens):
+        if self.cfg.debug:
+            print("Tokens:", tokens.shape)
+        embeddings = self.W_E[tokens,:]
+        if self.cfg.debug:
+            print("Embeddings:", embeddings.shape)
+        return embeddings
+# %%
+rand_int_test(Embed, [2,4])
+load_gpt2_test(Embed,reference_gpt2.embed, tokens)
+# %%
