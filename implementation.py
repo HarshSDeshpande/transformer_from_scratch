@@ -17,7 +17,8 @@ if MAIN:
     reference_gpt2 = EasyTransformer.from_pretrained("gpt2-small", fold_ln=False, center_unembed=False, center_writing_weights=False)
 #%%
 if MAIN:
-    tokens = reference_gpt2.to_tokens("Never forget who you are. The rest of the world will not. Wear it like armour, and it can never be used to hurt you.")
+    reference_text = "Never forget who you are. The rest of the world will not. Wear it like armour, and it can never be used to hurt you."
+    tokens = reference_gpt2.to_tokens(reference_text)
     tokens = tokens.cuda()
     logits,cache = reference_gpt2.run_with_cache(tokens)
     
@@ -138,3 +139,8 @@ class PosEmbed(nn.Module):
 if MAIN:
     rand_int_test(PosEmbed,[2,4])
     load_gpt2_test(PosEmbed, reference_gpt2.pos_embed,tokens)
+# %%
+if MAIN:
+    import pysvelte
+    pysvelte.AttentionMulti(tokens=reference_gpt2.to_str_tokens(reference_text),attention = cache['blocks.0.attn.hook_attn'][0].permute(1,2,0)).show()
+# %%
