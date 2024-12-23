@@ -144,3 +144,51 @@ if MAIN:
     import pysvelte
     pysvelte.AttentionMulti(tokens=reference_gpt2.to_str_tokens(reference_text),attention = cache['blocks.0.attn.hook_attn'][0].permute(1,2,0)).show()
 # %%
+class Attention(nn.Module):
+    def __init__(self,cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.W_Q = nn.Parameter(torch.empty((cfg.n_heads,cfg.d_model,cfg.d_head)))
+        nn.init.normal_(self.W_Q,std=self.cfg.init_range)
+        self.b_Q = nn.Parameter(torch.zeros((cfg.n_heads,cfg.d_head)))
+        self.W_K = nn.Parameter(torch.empty((cfg.n_heads,cfg.d_model,cfg.d_head)))
+        nn.init.normal_(self.W_K,std=self.cfg.init_range)
+        self.b_K = nn.Parameter(torch.zeros((cfg.n_heads,cfg.d_head)))
+        self.W_V = nn.Parameter(torch.empty((cfg.n_heads,cfg.d_model,cfg.d_head)))
+        nn.init.normal_(self.W_V,std=self.cfg.init_range)
+        self.b_V = nn.Parameter(torch.zeros((cfg.n_heads,cfg.d_head)))
+
+        self.W_O = nn.Parameter(torch.empty((cfg.n_heads,cfg.d_head,cfg.d_model)))
+        nn.init.normal_(self.W_O,std=self.cfg.init_range)
+        self.b_O = nn.Parameter(torch.zeros(cfg.d_model))
+
+        self.register_buffer("IGNORE",torch.tensor(-1e5,dtype=torch.float32,device="cuda"))
+    
+    def forward(self,normalized_resid_pre):
+        if self.cfg.debug:
+            print("Normalized residual pre:", normalized_resid_pre.shape)
+        q = einsum("batch query_pos d_model, n_heads d_model d_head -> batch query_pos n_heads d_head", normalized_resid_pre, self.W_Q) + self.b_Q
+        k = einsum("batch key_pos d_model, n_heads d_model d_head -> batch key_pos n_heads d_head", normalized_resid_pre, self.W_K) + self.b_K
+        
+        attn_scores = einsum("batch query_pos n_heads d_head, batch key_pos n_heads d_head -> batch n_heads query_pos key_pos", q, k)
+        attn_scores = attn_scores / math.sqrt(self.cfg.d_head)
+        attn_scores = self.apply_causal_mask(attn_scores)
+
+        pattern = attn_scores.softmax(dim=-1)
+
+        v = einsum("batch key_pos d_model, n_heads d_model d_head -> batch key_pos n_heads d_head", normalized_resid_pre, self.W_V) + self.b_V
+
+        z = einsum("batch n_heads query_pos key_pos, batch key_pos n_heads d_head -> batch query_pos n_heads d_head", pattern, v)
+
+        attn_out = einsum("batch query_pos n_heads d_head, n_heads d_head d_model -> batch query_pos d_model", z, self.W_O) + self.b_O
+        return attn_out
+
+    def apply_causal_mask(self,attn_scores):
+        mask = torch.triu(torch.ones(attn_scores.size(-2),attn_scores.size(-1),device=attn_scores.device),diagonal=1).bool()
+        attn_scores.masked_fill_(mask,self.IGNORE)
+        return attn_scores
+# %%
+if MAIN:
+    rand_float_test(Attention,[2,4,768])
+    load_gpt2_test(Attention,reference_gpt2.blocks[0].attn,cache["blocks.0.ln1.hook_normalized"])
+# %%
