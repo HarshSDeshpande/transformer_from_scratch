@@ -294,3 +294,11 @@ def lm_cross_entropy_loss(logits, tokens):
     log_probs = logits.log_softmax(dim=-1)
     pred_log_probs = log_probs[:,:-1].gather(dim=-1,index=tokens[:,1:].unsqueeze(-1)).squeeze(-1)
     return -pred_log_probs.mean()
+# %%
+if MAIN:
+    loss = lm_cross_entropy_loss(demo_logits, test_tokens)
+    print(loss)
+    print("Loss as average prob", (-loss).exp())
+    print("Loss as 'uniform over this many variables'", (loss).exp())
+    print("Uniform loss over the vocab",math.log(demo_gpt2.cfg.d_vocab))
+# %%
