@@ -302,3 +302,52 @@ if MAIN:
     print("Loss as 'uniform over this many variables'", (loss).exp())
     print("Uniform loss over the vocab",math.log(demo_gpt2.cfg.d_vocab))
 # %%
+if MAIN:
+    test_string = "A mind needs books like a sword needs a whetstone."
+    for i in tqdm.tqdm(range(100)):
+        test_tokens = reference_gpt2.to_tokens(test_string).cuda()
+        demo_logits = demo_gpt2(test_tokens)
+        test_string += reference_gpt2.tokenizer.decode(demo_logits[-1,-1].argmax())
+    print(test_string)
+# %%
+import datasets
+import transformers
+import plotly.express as px
+# %%
+batch_size = 8
+num_epochs = 1
+max_steps = 1000
+log_every = 10
+lr = 1e-3
+weight_decay = 1e-2
+model_cfg = Config(debug=False, d_model=256, n_heads=4, d_head=64, d_mlp=1024, n_layers=2, n_ctx=256, d_vocab=reference_gpt2.cfg.d_vocab)
+# %%
+if MAIN:
+    dataset = datasets.load_dataset("NeelNanda/pile-10k", split="train")
+    print(dataset)
+    print(dataset[0]['text'][:100])
+    tokens_dataset = tokenize_and_concatenate(dataset, reference_gpt2.tokenizer, streaming=False, max_length=model_cfg.n_ctx, column_name="text", add_bos_token=True, num_proc=4)
+    data_loader = torch.utils.data.DataLoader(tokens_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+# %%
+if MAIN:
+    model = DemoTransformer(model_cfg).cuda()
+    optimizer = torch.optim.AdamW(model.parameters(),lr = lr,weight_decay=weight_decay)
+# %%
+if MAIN:
+    losses = []
+    print("Number of batches:",len(data_loader))
+    for epoch in range(num_epochs):
+        for c, batch in tqdm.tqdm(enumerate(data_loader)):
+            tokens = batch['tokens'].cuda()
+            logits = model(tokens)
+            loss = lm_cross_entropy_loss(logits, tokens)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            losses.append(loss.item())
+            if c % log_every == 0:
+                print(f"Step: {c}, Loss: {loss.item():.4f}")
+            if c > max_steps:
+                break
+# %%
+px.line(y=losses, x=np.arange(len(losses))*(model_cfg.n_ctx * batch_size), labels={"y":"Loss", "x":"Tokens"}, title="Training curve for my tiny demo model!")
